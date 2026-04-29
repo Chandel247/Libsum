@@ -53,12 +53,26 @@ pip install -e ".[dev]"
 
 The library has no hard-coded AI backend. You choose a **vision provider** (analyses frames) and a **text provider** (writes the summary) independently.
 
-| Provider | Class | Requires |
-|---|---|---|
-| Anthropic Claude | `ClaudeProvider` | `ANTHROPIC_API_KEY` env var |
-| Ollama (local) | `OllamaProvider` | Ollama running at `localhost:11434` |
+| Provider | Class | `ProviderType` | Requires |
+|---|---|---|---|
+| Anthropic Claude | `ClaudeProvider` | `API` | `ANTHROPIC_API_KEY` env var |
+| Ollama (local) | `OllamaProvider` | `LOCAL_SERVICE` | Ollama running at `localhost:11434` |
+| Custom ANN | `NeuralProvider` | `LOCAL_MODEL` | Trained weight files (see [Neural provider](#neural-provider)) |
 
 You can mix and match — e.g. local vision with Claude summarization.
+
+### Provider factory
+
+Instead of importing classes directly you can use the registry:
+
+```python
+from videosum.providers import create_provider, available_providers
+
+print(available_providers())  # ['claude', 'ollama', 'neural']
+
+provider = create_provider("claude", model="claude-sonnet-4-6")
+provider = create_provider("ollama", model="llava")
+```
 
 ## Quick start
 
@@ -140,6 +154,34 @@ result.frames_analyzed    # number of frames sent to vision provider
 result.transcript_word_count  # words in the audio transcript
 ```
 
+## Neural provider
+
+`NeuralProvider` is a structural placeholder for locally-trained ANN models. Instantiation always succeeds; inference raises `ModelNotTrainedError` until the underlying models are built and weights are provided.
+
+Two planned models live in `videosum/nn/` (not yet implemented):
+
+| Model | Architecture | Task |
+|---|---|---|
+| `FrameCaptionNet` | ResNet-18 + LSTM decoder | Frame captioning (train on MS COCO) |
+| `VideoSummaryNet` | BiLSTM encoder + Attention decoder | Text summarization (train on CNN/DailyMail) |
+
+Install the `neural` extra before training:
+
+```bash
+pip install -e ".[neural]"
+```
+
+Once weights are available:
+
+```python
+from videosum.providers import NeuralProvider
+
+provider = NeuralProvider(
+    vision_weights="videosum/nn/weights/caption.pt",
+    text_weights="videosum/nn/weights/summary.pt",
+)
+```
+
 ## Custom providers
 
 Implement the two abstract methods to plug in any backend:
@@ -176,26 +218,4 @@ If you don't have a video handy, FFmpeg can make one:
 ffmpeg -f lavfi -i testsrc=duration=10:size=640x360:rate=30 \
        -f lavfi -i sine=frequency=440:duration=10 \
        -shortest test_clip.mp4
-```
-
-## Project structure
-
-```
-videosum_proj/
-├── videosum/
-│   ├── providers/
-│   │   ├── base.py       # VisionProvider and TextProvider abstract classes
-│   │   ├── claude.py     # Anthropic Claude implementation
-│   │   └── ollama.py     # Ollama implementation
-│   ├── extractor.py      # FFmpeg frame and audio extraction
-│   ├── transcriber.py    # faster-whisper transcription
-│   ├── analyzer.py       # frame batching and vision calls
-│   ├── summarizer.py     # prompt construction and response parsing
-│   ├── pipeline.py       # end-to-end orchestration
-│   ├── models.py         # SummaryResult and TranscriptSegment dataclasses
-│   └── utils.py          # TempDir, timestamp formatting, chunking
-├── tests/                # 20 unit tests, no API keys required
-├── examples/
-│   └── basic_usage.py    # runnable examples for all three provider modes
-└── pyproject.toml
 ```
