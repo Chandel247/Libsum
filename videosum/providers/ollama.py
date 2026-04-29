@@ -2,10 +2,12 @@ import base64
 
 import httpx
 
-from .base import TextProvider, VisionProvider
+from .base import ProviderType, TextProvider, VisionProvider
 
 
 class OllamaProvider(VisionProvider, TextProvider):
+    provider_type = ProviderType.LOCAL_SERVICE
+
     def __init__(self, model: str, base_url: str = "http://localhost:11434"):
         self._model = model
         self._base_url = base_url.rstrip("/")

@@ -3,7 +3,7 @@ import json
 
 from anthropic import Anthropic
 
-from .base import TextProvider, VisionProvider
+from .base import ProviderType, TextProvider, VisionProvider
 
 _VISION_SYSTEM = (
     "You are a video analysis assistant. Describe video frames concisely and accurately, "
@@ -12,6 +12,8 @@ _VISION_SYSTEM = (
 
 
 class ClaudeProvider(VisionProvider, TextProvider):
+    provider_type = ProviderType.API
+
     def __init__(self, model: str = "claude-sonnet-4-6", api_key: str | None = None):
         self._client = Anthropic(api_key=api_key)
         self._model = model
