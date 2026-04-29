@@ -1,9 +1,12 @@
+import logging
 from pathlib import Path
 
 from . import analyzer, extractor, summarizer, transcriber
 from .models import SummaryResult
 from .providers.base import TextProvider, VisionProvider
 from .utils import TempDir
+
+logger = logging.getLogger(__name__)
 
 
 def summarize_video(
@@ -18,14 +21,20 @@ def summarize_video(
     if not video_path.exists():
         raise FileNotFoundError(f"Video not found: {video_path}")
 
+    logger.info("Processing: %s", video_path.name)
     with TempDir() as tmp:
+        logger.info("Extracting frames (every %ds) ...", frame_interval)
         frames = extractor.extract_frames(video_path, frame_interval, tmp)
+        logger.info("Extracted %d frames", len(frames))
 
         transcript_segments = []
         if include_transcript:
+            logger.info("Extracting audio ...")
             audio_path = extractor.extract_audio(video_path, tmp)
             if audio_path:
                 transcript_segments = transcriber.transcribe(audio_path)
+            else:
+                logger.info("No audio track found; skipping transcription.")
 
         descriptions = analyzer.analyze_frames(frames, vision_provider)
         return summarizer.summarize(

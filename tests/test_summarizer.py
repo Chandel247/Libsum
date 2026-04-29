@@ -17,11 +17,24 @@ def test_parse_response_extracts_all_sections():
     assert "many topics" in narrative
 
 
-def test_parse_response_handles_missing_sections():
-    tldr, outline, narrative = _parse_response("Some unstructured text")
-    assert tldr == ""
+def test_parse_response_falls_back_to_raw_on_missing_sections():
+    raw = "Some unstructured text with no sections"
+    tldr, outline, narrative = _parse_response(raw)
+    assert tldr == raw
     assert outline == ""
     assert narrative == ""
+
+
+def test_parse_response_handles_markdown_headers():
+    text = (
+        "## **TL;DR:**\nA sci-fi epic unfolds.\n\n"
+        "**Outline:**\n[0:00] Opening scene\n\n"
+        "### Narrative:\nThe story begins in the desert."
+    )
+    tldr, outline, narrative = _parse_response(text)
+    assert "sci-fi" in tldr
+    assert "Opening" in outline
+    assert "desert" in narrative
 
 
 def test_build_prompt_includes_both_streams(sample_transcript):

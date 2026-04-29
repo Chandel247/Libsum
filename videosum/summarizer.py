@@ -1,6 +1,11 @@
+import logging
+import re
+
 from .models import SummaryResult, TranscriptSegment
 from .providers.base import TextProvider
 from .utils import format_timestamp
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM = (
     "You are an expert video content analyst. Your task is to produce structured summaries "
@@ -49,20 +54,53 @@ def _build_prompt(
     return "\n".join(lines)
 
 
+_SECTION_MARKERS: dict[str, re.Pattern] = {
+    "tldr":      re.compile(r"tl[;,]?dr:?\s*",  re.IGNORECASE),
+    "outline":   re.compile(r"outline:?\s*",      re.IGNORECASE),
+    "narrative": re.compile(r"narrative:?\s*",    re.IGNORECASE),
+}
+
+
+def _clean_line(line: str) -> str:
+    """Strip markdown heading markers and bold/italic asterisks from a line."""
+    line = re.sub(r"^#+\s*", "", line)
+    line = re.sub(r"\*+", "", line)
+    return line.strip()
+
+
 def _parse_response(text: str) -> tuple[str, str, str]:
-    sections: dict[str, str] = {"TL;DR:": "", "OUTLINE:": "", "NARRATIVE:": ""}
+    sections: dict[str, str] = {"tldr": "", "outline": "", "narrative": ""}
     current: str | None = None
+
     for line in text.splitlines():
-        stripped = line.strip()
-        if stripped in sections:
-            current = stripped
+        cleaned = _clean_line(line)
+        matched_key = None
+        remainder = ""
+        for key, pattern in _SECTION_MARKERS.items():
+            m = pattern.match(cleaned)
+            if m:
+                matched_key = key
+                remainder = cleaned[m.end():].strip()
+                break
+
+        if matched_key:
+            current = matched_key
+            if remainder:
+                sections[current] += remainder + "\n"
         elif current is not None:
             sections[current] += line + "\n"
-    return (
-        sections["TL;DR:"].strip(),
-        sections["OUTLINE:"].strip(),
-        sections["NARRATIVE:"].strip(),
-    )
+
+    tldr      = sections["tldr"].strip()
+    outline   = sections["outline"].strip()
+    narrative = sections["narrative"].strip()
+
+    # If the model ignored the format entirely, surface the raw response so it
+    # isn't silently swallowed.
+    if not any([tldr, outline, narrative]):
+        logger.warning("Response did not match expected structure; returning raw output.")
+        return text.strip(), "", ""
+
+    return tldr, outline, narrative
 
 
 def summarize(
@@ -71,8 +109,11 @@ def summarize(
     provider: TextProvider,
     summary_length: str = "medium",
 ) -> SummaryResult:
+    logger.info("Generating summary (%s) from %d scenes, %d transcript segments ...",
+                summary_length, len(descriptions), len(transcript))
     prompt = _build_prompt(descriptions, transcript, summary_length)
     response = provider.generate(_SYSTEM, prompt)
+    logger.info("Summary received (%d chars)", len(response))
     tldr, outline, narrative = _parse_response(response)
 
     duration = descriptions[-1][0] if descriptions else 0.0

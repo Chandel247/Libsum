@@ -3,9 +3,13 @@ Usage examples for videosum.
 
 Run with: python examples/basic_usage.py <path_to_video.mp4>
 """
+import logging
 import sys
+
 from videosum import summarize
 from videosum.providers import ClaudeProvider, OllamaProvider
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 def claude_example(video_path: str) -> None:
