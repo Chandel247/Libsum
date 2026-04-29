@@ -28,3 +28,6 @@ htmlcov/
 
 # Temp files from videosum itself
 videosum_*/
+
+# Trained model weights
+videosum/nn/weights/
